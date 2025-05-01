@@ -1,4 +1,4 @@
-from Shape import entity2shape
+from shape import entity2shape
 import os
 import ezdxf
 import clip 
@@ -46,11 +46,12 @@ def process_dxf(dxf_file):
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, preprocess = clip.load("ViT-B/32", device=device)
-
+    exclude = []
     for insert in msp.query("INSERT"):
         img = render_block(doc, insert)
         pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        labels = ["wall drawn in a blueprint", "window drawn in a blueprint", "door drawn in a blueprint", "object drawn in a blueprint"]
+        objects = ["wall", "window", "door", "object"]
+        labels = [f"representation of a {rep} in a floor plan" for rep in objects]
         
         img_tensor = preprocess(pil_img).unsqueeze(0).to(device)
         text_tokens = clip.tokenize(labels).to(device)
@@ -63,13 +64,19 @@ def process_dxf(dxf_file):
             logits_per_image, _ = model(img_tensor, text_tokens)
             probs = logits_per_image.softmax(dim=-1).cpu().numpy()[0]
         
-        print(dict(zip(labels, probs)))
-                        
-        cv2.imshow(f"Block: {insert.dxf.name}", img)
-        cv2.waitKey(0)
+        arg_pred = np.argmax(probs)
+        insert_id = insert.dxf.handle
+        print(f"Predicted label for insert {insert_id}: {labels[arg_pred]} with a probability of {probs[arg_pred]}")
+        if arg_pred == 3:
+            exclude.append(insert.dxf.handle)
+    print(f"To exclude {exclude}")
+    return exclude
+        #cv2.imshow(f"Block: {insert.dxf.name}", img)
+        #cv2.waitKey(0)
+
 
 def main():
-    process_dxf("/home/aiserver/projects/InsertCLIP/dataset/1-Crosby_Original.dxf")
+    process_dxf("./dataset/1-Crosby_Original.dxf")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,18 @@
+clip @ git+https://github.com/openai/CLIP.git@dcba3cb2e2827b402d2701e7e1c7d9fed8a20ef1
+ezdxf==1.1.4
+fonttools==4.57.0
+ftfy==6.2.3
+mkl-fft @ file:///croot/mkl_fft_1695058164594/work
+mkl-random @ file:///croot/mkl_random_1695059800811/work
+mkl-service==2.4.0
+numpy @ file:///work/mkl/numpy_and_numpy_base_1682953417311/work
+opencv-python==4.11.0.86
+packaging==25.0
+Pillow==9.3.0
+pyparsing==3.1.4
+regex==2024.11.6
+torch==1.7.1
+torchvision==0.8.2
+tqdm==4.67.1
+typing_extensions @ file:///croot/typing_extensions_1715268824938/work
+wcwidth==0.2.13
