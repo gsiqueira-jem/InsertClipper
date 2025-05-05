@@ -23,25 +23,30 @@ def draw_shapes(shape_list, image_size, offset, scale):
     
 
 def render_block(doc, insert, image_size=(512,512), padding=20):
-    name = insert.dxf.name
-    block = doc.blocks.get(name)
+    try:
+        name = insert.dxf.name
+        block = doc.blocks.get(name)
 
-    shape_list = [entity2shape(entity) for entity in block]
-    shape_list = [shape for shape in shape_list if shape]
-    min_x, max_x, min_y, max_y = get_limits(shape_list)
-    
-    dx = max_x - min_x
-    dy = max_y - min_y
-    
-    scale = min((image_size[0] - 2 * padding) / dx, (image_size[1] - 2 * padding) / dy)
-    offset = (min_x - padding / scale, min_y - padding / scale)
+        shape_list = [entity2shape(entity) for entity in block]
+        shape_list = [shape for shape in shape_list if shape]
+        
+        min_x, max_x, min_y, max_y = get_limits(shape_list)
+        
+        dx = max_x - min_x
+        dy = max_y - min_y
+        
+        scale = min((image_size[0] - 2 * padding) / dx, (image_size[1] - 2 * padding) / dy)
+        offset = (min_x - padding / scale, min_y - padding / scale)
 
-    img = draw_shapes(shape_list, image_size, offset, scale)
+        img = draw_shapes(shape_list, image_size, offset, scale)
+    
+    except Exception as e:
+        print(f"Error {e} rendering {block}")
+        return None
     
     return img
 
-def process_dxf(dxf_file):
-    doc = ezdxf.readfile(dxf_file)
+def process_doc(doc):
     msp = doc.modelspace()
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -49,6 +54,8 @@ def process_dxf(dxf_file):
     exclude = []
     for insert in msp.query("INSERT"):
         img = render_block(doc, insert)
+        if img is None:
+            continue
         pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         objects = ["wall", "window", "door", "object"]
         labels = [f"representation of a {rep} in a floor plan" for rep in objects]
@@ -71,12 +78,18 @@ def process_dxf(dxf_file):
             exclude.append(insert.dxf.handle)
     print(f"To exclude {exclude}")
     return exclude
-        #cv2.imshow(f"Block: {insert.dxf.name}", img)
-        #cv2.waitKey(0)
+
+def process_dxf_file(dxf_file):
+    doc = ezdxf.readfile(dxf_file)
+    return process_doc(doc)
+
+def process_dxf_bytes(dxf_stream):
+    doc = ezdxf.read(dxf_stream)
+    return process_doc(doc)
 
 
 def main():
-    process_dxf("./dataset/1-Crosby_Original.dxf")
+    process_dxf_file("./dataset/1-Crosby_Original.dxf")
 
 
 if __name__ == "__main__":
