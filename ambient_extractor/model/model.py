@@ -10,11 +10,10 @@ class TextClassifier(nn.Module):
             nn.Linear(embed_dim, 1),
             nn.Sigmoid()
         )
+        for param in self.text_encoder.parameters():
+            param.requires_grad = False
     
     def forward(self, input_ids, attention_mask):
-        with torch.no_grad():
-            outputs = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
-        
+        outputs = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
         cls_embedding = outputs.last_hidden_state[:, 0, :]  
-
         return self.classifier(cls_embedding).squeeze(-1)

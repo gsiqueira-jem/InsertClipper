@@ -9,7 +9,7 @@ def test(model, test_loader, criterion, device):
     
     model.eval()
     with torch.no_grad():
-        loop = tqdm(test_loader, desc="Batch:")
+        loop = tqdm(test_loader, desc="Batch")
         for input_ids, attention_mask, labels in loop:
             input_ids, attention_mask, labels = input_ids.to(device), attention_mask.to(device), labels.to(device)
 

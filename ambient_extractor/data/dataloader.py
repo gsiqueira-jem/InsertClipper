@@ -5,8 +5,8 @@ from transformers import AutoTokenizer
 from sklearn.model_selection import train_test_split
 
 
-def load_data(DATA_PATH, split=0.2):
-    cad_dataset = pd.read_csv(DATA_PATH)
+def load_data(data_path, batch_size=50, split=0.2):
+    cad_dataset = pd.read_csv(data_path)
     cad_dataset["label"] = cad_dataset["label"] == "AMBIENT"
     cad_dataset["label"] = cad_dataset["label"].astype(int)
 
@@ -25,7 +25,7 @@ def load_data(DATA_PATH, split=0.2):
     
 
     # Create DataLoaders
-    train_loader = DataLoader(train_dataset, batch_size=10, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=10)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
     return train_loader, test_loader
