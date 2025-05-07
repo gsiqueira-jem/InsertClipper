@@ -17,3 +17,19 @@ class TextClassifier(nn.Module):
         outputs = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
         cls_embedding = outputs.last_hidden_state[:, 0, :]  
         return self.classifier(cls_embedding).squeeze(-1)
+    
+    def save_onnx(self, model_path, input_ids, attention_mask):
+        torch.onnx.export(
+            self,
+            (input_ids, attention_mask),  # tuple of inputs
+            model_path,       # output file
+            input_names=["input_ids", "attention_mask"],
+            output_names=["output"],
+            dynamic_axes={
+                "input_ids": {0: "batch_size", 1: "seq_len"},
+                "attention_mask": {0: "batch_size", 1: "seq_len"},
+                "output": {0: "batch_size"}
+            },
+            opset_version=13,
+            do_constant_folding=True
+        )

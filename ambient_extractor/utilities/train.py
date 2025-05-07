@@ -1,5 +1,6 @@
 import torch
 from tqdm import tqdm
+from model.model import TextClassifier
 from sklearn.metrics import accuracy_score, f1_score
 
 def train(model, train_loader, criterion, optimizer, device, num_epochs=10):
@@ -47,4 +48,3 @@ def train(model, train_loader, criterion, optimizer, device, num_epochs=10):
                 'loss': total_loss,
             }, fname)
             tqdm.write(f"Saved model after {epoch+1} epochs → {fname}")
-        
