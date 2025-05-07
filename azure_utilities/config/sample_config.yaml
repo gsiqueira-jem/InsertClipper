@@ -1,0 +1,13 @@
+model:
+  name: <your_model_name>
+  path: <your_model_path>
+  description: <your_model_description>
+
+azure:
+  subscription_id: <your_subscription_id>
+  resource_group: <your_resource_group>
+  workspace_name: <your_workspace_name>
+
+environment:
+  name: onnx-env
+  conda_file: env/conda.yml
