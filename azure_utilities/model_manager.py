@@ -1,6 +1,6 @@
 from azure.ai.ml import MLClient
 from azure.identity import DefaultAzureCredential
-from azure.ai.ml.entities import Model, Environment, ManagedOnlineEndpoint, ManagedOnlineDeployment
+from azure.ai.ml.entities import Model, Environment, ManagedOnlineEndpoint, ManagedOnlineDeployment, CodeConfiguration
 from config.read_config import load_config
 
 
@@ -10,8 +10,9 @@ def create_configs():
     azure_cf = config["azure"]
     model_cf = config["model"]
     env_cf = config["environment"]
+    api_cf = config["endpoint"]
 
-    return azure_cf, model_cf, env_cf
+    return azure_cf, model_cf, env_cf, api_cf
 
 def create_client(azure_cf):
     ml_client = MLClient(DefaultAzureCredential(), 
@@ -38,19 +39,19 @@ def register_model(ml_client, model_cf):
     ml_client.models.create_or_update(model)
     return model
 
-def deploy_model(ml_client, model, env):
+def deploy_model(ml_client, model, env, api_cf):
     endpoint = ManagedOnlineEndpoint(
-        name="onnx-endpoint",
-        auth_mode="key"
+        name=api_cf["name"],
+        auth_mode=api_cf["auth"]
     )
-
+    
     deployment = ManagedOnlineDeployment(
-        name="onnx-deploy",
+        name=api_cf["deploy_name"],
         endpoint_name=endpoint.name,
         model=model,
         environment=env,
-        code_configuration={"code": ".", "scoring_script": "score.py"},
-        instance_type="Standard_DS2_v2",
+        code_configuration=CodeConfiguration(code=".", scoring_script="src/score.py"),
+        instance_type=api_cf["instance_type"],
         instance_count=1
     )
 
@@ -59,15 +60,20 @@ def deploy_model(ml_client, model, env):
 
     # Set default deployment
     ml_client.online_endpoints.begin_update(
-        ManagedOnlineEndpoint(name="onnx-endpoint", defaults={"deployment_name": "onnx-deploy"})
+        ManagedOnlineEndpoint(name=endpoint.name, defaults={deployment.name})
     ).wait()
 
 def register_and_deploy_model():
-    azure_cf, model_cf, env_cf = create_configs()
+    azure_cf, model_cf, env_cf, api_cf = create_configs()
+    print("Creating ML Client")
     ml_client = create_client(azure_cf)
+    print("Creating Conda Environment")
     env = create_env(env_cf)
+    print("Registering Model")
     model = register_model(ml_client, model_cf)
-    deploy_model(ml_client, model, env)
+    print("Deploying Model")
+    deploy_model(ml_client, model, env, api_cf)
+    print("Model Deployed")
 
 if __name__ == "__main__":
     register_and_deploy_model()
