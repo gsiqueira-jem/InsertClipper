@@ -24,8 +24,9 @@ def create_client(azure_cf):
 def create_env(env_cf):
     env = Environment(
         name=env_cf["name"],
-        conda_file=env_cf["conda_file"]
+        image=env_cf["image"],
     )
+
     return env
 
 def register_model(ml_client, model_cf):
@@ -58,10 +59,17 @@ def deploy_model(ml_client, model, env, api_cf):
     ml_client.online_endpoints.begin_create_or_update(endpoint).wait()
     ml_client.online_deployments.begin_create_or_update(deployment).wait()
 
-    # Set default deployment
-    ml_client.online_endpoints.begin_update(
-        ManagedOnlineEndpoint(name=endpoint.name, defaults={deployment.name})
-    ).wait()
+    endpoint = ml_client.online_endpoints.get(name=api_cf["name"])  # Fetch the existing endpoint
+
+    # Set traffic to the deployment
+    endpoint.traffic = {
+        api_cf["deploy_name"]: 100  # 100% of the traffic is routed to this deployment
+    }
+
+    # Update the endpoint with the new traffic configuration
+    ml_client.online_endpoints.begin_create_or_update(endpoint).wait()
+
+
 
 def register_and_deploy_model():
     azure_cf, model_cf, env_cf, api_cf = create_configs()
