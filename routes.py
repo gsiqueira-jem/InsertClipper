@@ -1,15 +1,25 @@
 import os
 import logging
-from fastapi import APIRouter, File, UploadFile, Form
-from insert_clipper import process_dxf_bytes, process_dxf_file
+import torch
+from fastapi import APIRouter, File, UploadFile, Form, Query
+from typing import List
+from insert_clipper import process_dxf_file
 from threading import Thread
 from uuid import uuid4
 import traceback
-from io import BytesIO
 from fastapi import HTTPException
+from ambient_extractor.model.model import TextClassifier
+from transformers import AutoTokenizer
+from pydantic import BaseModel
+import torch
+import json
 
+path = "/home/aiserver/projects/InsertCLIP/ambient_extractor/checkpoints/best_model.pt"
 router = APIRouter()
 task_status = {}
+text_model = TextClassifier()
+text_model.load_state_dict(torch.load(path, weights_only=True))
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
 
 def setup_logger(task_id, log_folder):
@@ -73,3 +83,28 @@ def get_status(task_id: str):
         raise HTTPException(status_code=404, detail="Task ID not found")
     
     return status
+
+
+# Classe de entrada usando Pydantic
+class InputModel(BaseModel):
+    input: List[str]
+
+@router.post("/ambient-extractor/")
+def extract_ambients(payload: InputModel):
+    texts = payload.input
+
+    encodings = tokenizer(
+        texts,
+        padding="max_length",
+        truncation=True,
+        max_length=128,
+        return_tensors=None
+    )
+
+    input_ids = torch.tensor(encodings['input_ids'], dtype=torch.long)
+    attention_mask = torch.tensor(encodings['attention_mask'], dtype=torch.long)
+
+    outputs = text_model(input_ids, attention_mask)
+    preds = (outputs > 0.5).int().tolist()
+
+    return json.dumps({"result": preds})
