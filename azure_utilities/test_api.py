@@ -17,7 +17,7 @@ headers = {
 }
 
 # Send a POST request to the endpoint
-response = requests.post(scoring_uri, headers=headers, json=input_data, timeout=120)
+response = requests.post(scoring_uri, headers=headers, json=input_data)
 
 # Check if the response is successful
 if response.status_code == 200:

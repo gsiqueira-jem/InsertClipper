@@ -57,9 +57,11 @@ def process_doc(doc):
         if img is None:
             continue
         pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        objects = ["wall", "window", "door", "object"]
-        labels = [f"representation of a {rep} in a floor plan" for rep in objects]
+        objects = ["a wall", "a window", "a door", "furtinure"]
+        labels = [f"a CAD drawing of {rep} in a floor plan" for rep in objects]
+        unknown_lb = "an unknown object in a CAD floor plan"
         
+        labels.append(unknown_lb)
         img_tensor = preprocess(pil_img).unsqueeze(0).to(device)
         text_tokens = clip.tokenize(labels).to(device)
 
@@ -74,7 +76,7 @@ def process_doc(doc):
         arg_pred = np.argmax(probs)
         insert_id = insert.dxf.handle
         print(f"Predicted label for insert {insert_id}: {labels[arg_pred]} with a probability of {probs[arg_pred]}")
-        if arg_pred == 3:
+        if arg_pred >= 3:
             exclude.append(insert.dxf.handle)
     print(f"To exclude {exclude}")
     return exclude
