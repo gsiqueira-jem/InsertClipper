@@ -2,130 +2,87 @@ import re
 import math
 import logging
 import traceback
-from svgpathtools import svg2paths, wsvg, Path, Line, CubicBezier, QuadraticBezier, Arc
-import numpy as np
-import xml.etree.ElementTree as ET
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)  # Changed to ERROR level
 logger = logging.getLogger(__name__)
 
-def extract_coordinates_from_path(path_data):
-    # Split the path data into commands and their parameters
-    commands = path_data.strip().split()
-    if not commands:
-        return []
-        
-    # Convert to absolute coordinates
-    current_x, current_y = 0, 0
-    absolute_coords = []
+def parse_simple_path(path_str):
+    tokens = path_str.strip().split()
     i = 0
-    
-    while i < len(commands):
-        cmd = commands[i].upper()
-        try:
-            if cmd == 'M':
-                if i + 2 >= len(commands):
-                    break
-                # Handle coordinates that might be comma-separated
-                coords = commands[i+1].split(',')
-                if len(coords) == 2:
-                    current_x, current_y = float(coords[0]), float(coords[1])
-                else:
-                    current_x, current_y = float(commands[i+1]), float(commands[i+2])
-                    i += 1
-                absolute_coords.append(('M', current_x, current_y))
-                i += 2
-                
-            elif cmd == 'L':
-                if i + 2 >= len(commands):
-                    break
-                # Handle coordinates that might be comma-separated
-                coords = commands[i+1].split(',')
-                if len(coords) == 2:
-                    current_x, current_y = float(coords[0]), float(coords[1])
-                else:
-                    current_x, current_y = float(commands[i+1]), float(commands[i+2])
-                    i += 1
-                absolute_coords.append(('L', current_x, current_y))
-                i += 2
-                
-            elif cmd == 'A':
-                if i + 7 >= len(commands):
-                    break
-                    
-                # Extract arc parameters
-                rx = float(commands[i+1])
-                ry = float(commands[i+2])
-                x_axis_rotation = float(commands[i+3])
-                large_arc_flag = int(commands[i+4])
-                sweep_flag = int(commands[i+5])
-                end_x = float(commands[i+6])
-                end_y = float(commands[i+7])
-                
-                # Add the arc command with all its parameters
-                absolute_coords.append(('A', rx, ry, x_axis_rotation, large_arc_flag, sweep_flag, end_x, end_y))
-                
-                current_x, current_y = end_x, end_y
-                i += 8
-                
-            else:
-                i += 1
-                
-        except (ValueError, IndexError) as e:
-            logger.warning(f"Error parsing command {cmd}: {e}")
+    segments = []
+
+    while i < len(tokens):
+        cmd = tokens[i]
+        i += 1
+
+        if cmd == 'M':
+            x, y = map(float, tokens[i].split(','))
+            segments.append(('M', x, y))
             i += 1
-            continue
-    
-    return absolute_coords
+
+        elif cmd == 'L':
+            x, y = map(float, tokens[i].split(','))
+            segments.append(('L', x, y))
+            i += 1
+
+        elif cmd == 'A':
+            rx, ry = map(float, tokens[i].split(','))
+            i += 1
+            rotation = float(tokens[i])
+            i += 1
+            laf, sf = map(int, tokens[i].split(','))
+            i += 1
+            x, y = map(float, tokens[i].split(','))
+            i += 1
+            segments.append(('A', rx, ry, rotation, laf, sf, x, y))
+
+        else:
+            raise ValueError(f"Unexpected command: {cmd}")
+
+    return segments
+
 
 def calculate_bounding_box(elem):
     """
-    Calculate the bounding box of an SVG element using svgpathtools.
+    Calculate the bounding box of an SVG element (including paths).
     """
     try:
+        padding = 2.0
         if elem.tag.endswith('path'):
-            # Convert element to string and parse with svgpathtools
-            path_str = ET.tostring(elem, encoding='unicode')
-            paths, attributes = svg2paths(path_str)
+            path_data = elem.get('d', '')
+            coordinates = parse_simple_path(path_data)
+            if not coordinates:
+                logger.error(f"No coordinates found in path: {path_data[:50]}...")
+                return 0, 0, 0, 0
+
+            # Calculate the bounding box
+            xs = []
+            ys = []
+            for point in coordinates:
+                if point[0] == 'M' or point[0] == 'L':
+                    xs.append(point[1])
+                    ys.append(point[2])
+                elif point[0] == 'A':
+                    xs.append(point[6] + point[1])
+                    xs.append(point[6] - point[1])
+                    ys.append(point[7] + point[2])
+                    ys.append(point[7] - point[2])
             
-            if not paths:
-                logger.warning(f"No paths found in element")
+            if not xs or not ys:
+                logger.error(f"Empty coordinates after extraction for path")
                 return 0, 0, 0, 0
                 
-            # Get bounding box of all paths
-            min_x = float('inf')
-            min_y = float('inf')
-            max_x = float('-inf')
-            max_y = float('-inf')
-            
-            for path in paths:
-                bbox = path.bbox()
-                if bbox:
-                    min_x = min(min_x, bbox[0].real)
-                    min_y = min(min_y, bbox[0].imag)
-                    max_x = max(max_x, bbox[1].real)
-                    max_y = max(max_y, bbox[1].imag)
-            
-            if min_x == float('inf'):
-                logger.warning(f"Invalid bounding box calculated")
-                return 0, 0, 0, 0
-                
-            # Add padding
-            padding = 2.0
-            bbox = min_x - padding, min_y - padding, max_x + padding, max_y + padding
-            logger.debug(f"Path bbox: {bbox}")
+            bbox = min(xs) - padding, min(ys) - padding, max(xs) + padding, max(ys) + padding
             return bbox
-            
+        
         elif elem.tag.endswith('circle'):
             cx = float(elem.get('cx', 0))
             cy = float(elem.get('cy', 0))
             r = float(elem.get('r', 0))
-            padding = 2.0
             bbox = cx - r - padding, cy - r - padding, cx + r + padding, cy + r + padding
-            logger.debug(f"Circle bbox: {bbox}")
             return bbox
-            
+        
         elif elem.tag.endswith('ellipse'):
             cx = float(elem.get('cx', 0))
             cy = float(elem.get('cy', 0))
@@ -133,49 +90,43 @@ def calculate_bounding_box(elem):
             ry = float(elem.get('ry', 0))
             
             # Handle rotation
+            pivot_x = cx
+            pivot_y = cy
+            angle_deg = 0
+
             transform = elem.get('transform', '')
-            rotation_angle = 0
-            if 'rotate' in transform:
-                match = re.search(r'rotate\(([^)]+)\)', transform)
-                if match:
-                    rotation_angle = float(match.group(1))
+            if transform and transform.startswith("rotate"):
+                parts = transform.strip("rotate()").split(',')
+                angle_deg = float(parts[0])
+                if len(parts) == 3:
+                    pivot_x = float(parts[1])
+                    pivot_y = float(parts[2])
             
-            padding = 2.0
-            rx += padding
-            ry += padding
+            # Rotate center around pivot
+            theta_rad = math.radians(angle_deg)
+            dx = cx - pivot_x
+            dy = cy - pivot_y
+            rotated_cx = pivot_x + (dx * math.cos(theta_rad) - dy * math.sin(theta_rad))
+            rotated_cy = pivot_y + (dx * math.sin(theta_rad) + dy * math.cos(theta_rad))
             
-            if rotation_angle == 0:
-                bbox = cx - rx, cy - ry, cx + rx, cy + ry
-            else:
-                # For rotated ellipses, calculate the bounding box of the rotated rectangle
-                angle_rad = math.radians(rotation_angle)
-                cos_angle = math.cos(angle_rad)
-                sin_angle = math.sin(angle_rad)
-                
-                # Calculate the four corners of the rotated ellipse
-                corners = [
-                    (cx - rx, cy - ry),
-                    (cx + rx, cy - ry),
-                    (cx + rx, cy + ry),
-                    (cx - rx, cy + ry)
-                ]
-                
-                # Rotate each corner
-                rotated_corners = []
-                for px, py in corners:
-                    new_x = (px - cx) * cos_angle - (py - cy) * sin_angle + cx
-                    new_y = (px - cx) * sin_angle + (py - cy) * cos_angle + cy
-                    rotated_corners.append((new_x, new_y))
-                
-                # Find the bounding box of rotated corners
-                xs, ys = zip(*rotated_corners)
-                bbox = min(xs), min(ys), max(xs), max(ys)
-            
-            logger.debug(f"Ellipse bbox: {bbox}")
-            return bbox
+            # Project ellipse radii onto rotated coordinate system
+            cos_angle = math.cos(theta_rad)
+            sin_angle = math.sin(theta_rad)
+
+            # Calculate bounding box
+            width = abs(rx * cos_angle) + abs(ry * sin_angle)
+            height = abs(rx * sin_angle) + abs(ry * cos_angle)
+
+            left = rotated_cx - width - padding
+            right = rotated_cx + width + padding
+            top = rotated_cy - height - padding
+            bottom = rotated_cy + height + padding
+
+            return left, top, right, bottom
+
             
         else:
-            logger.warning(f"Unsupported element type: {elem.tag}")
+            logger.error(f"Unsupported element type: {elem.tag}")
             return 0, 0, 0, 0
             
     except Exception as e:
@@ -203,85 +154,93 @@ def scale_translate_group(group, bboxes, canvas_width=512, canvas_height=512):
     width = max_x - min_x
     height = max_y - min_y
 
-    # Calculate scaling factors to fit within the canvas while maintaining aspect ratio
+    # Calculate scaling factors to fit within the 512x512 canvas while maintaining aspect ratio
     scale_x = canvas_width / width
     scale_y = canvas_height / height
-    scale = min(scale_x, scale_y)
+    scale = min(scale_x, scale_y)  # We take the smaller scaling factor to maintain aspect ratio
     
-    # Calculate centering offsets
-    scaled_width = width * scale
-    scaled_height = height * scale
-    offset_x = (canvas_width - scaled_width) / 2
-    offset_y = (canvas_height - scaled_height) / 2
-    
-    # Create a new SVG with the scaled and translated elements
-    scaled_group = []
     for elem in group:
-        if elem.tag.endswith('path'):
-            # Convert element to string and parse with svgpathtools
-            path_str = ET.tostring(elem, encoding='unicode')
-            paths, attributes = svg2paths(path_str)
-            
-            if paths:
-                # Scale and translate the path
-                scaled_paths = []
-                for path in paths:
-                    # Scale and translate each segment
-                    scaled_segments = []
-                    for segment in path:
-                        if isinstance(segment, Line):
-                            start = segment.start * scale + (offset_x + offset_y * 1j)
-                            end = segment.end * scale + (offset_x + offset_y * 1j)
-                            scaled_segments.append(Line(start, end))
-                        elif isinstance(segment, Arc):
-                            # Scale radius and center
-                            radius = segment.radius * scale
-                            center = segment.center * scale + (offset_x + offset_y * 1j)
-                            start = segment.start * scale + (offset_x + offset_y * 1j)
-                            end = segment.end * scale + (offset_x + offset_y * 1j)
-                            scaled_segments.append(Arc(start, radius, segment.rotation, 
-                                                     segment.large_arc, segment.sweep, end))
-                    
-                    scaled_paths.append(Path(*scaled_segments))
-                
-                # Create new path element with scaled paths
-                new_elem = ET.Element(elem.tag, elem.attrib)
-                new_elem.set('d', ' '.join(str(p) for p in scaled_paths))
-                scaled_group.append(new_elem)
-                
-        elif elem.tag.endswith('ellipse'):
-            new_elem = ET.Element(elem.tag, elem.attrib)
+        if elem.tag.endswith('ellipse'):
+            # For <ellipse> elements: scale and translate
             cx = float(elem.get('cx', 0))
             cy = float(elem.get('cy', 0))
             rx = float(elem.get('rx', 0))
             ry = float(elem.get('ry', 0))
-            
-            new_elem.set('cx', str(((cx - min_x) * scale) + offset_x))
-            new_elem.set('cy', str(((cy - min_y) * scale) + offset_y))
-            new_elem.set('rx', str(rx * scale))
-            new_elem.set('ry', str(ry * scale))
-            scaled_group.append(new_elem)
-            
+
+            elem.set('cx', str((cx - min_x) * scale_x))
+            elem.set('cy', str((cy - min_y) * scale_y ))
+            elem.set('rx', str(rx * scale_x))
+            elem.set('ry', str(ry * scale_y))
+
+            transform = elem.get('transform', '')
+            if 'rotate' in transform:
+                angle, px, py = map(float, transform.strip("rotate()").split(','))
+                scaled_px = (px - min_x) * scale_x
+                scaled_py = (py - min_y) * scale_y
+                new_transform = f"rotate({angle}, {scaled_px}, {scaled_py})"
+                elem.set('transform', new_transform)
+
+                    
         elif elem.tag.endswith('circle'):
-            new_elem = ET.Element(elem.tag, elem.attrib)
+            # For <circle> elements: scale and translate
             cx = float(elem.get('cx', 0))
             cy = float(elem.get('cy', 0))
             r = float(elem.get('r', 0))
-            
-            new_elem.set('cx', str(((cx - min_x) * scale) + offset_x))
-            new_elem.set('cy', str(((cy - min_y) * scale) + offset_y))
-            new_elem.set('r', str(r * scale))
-            scaled_group.append(new_elem)
+
+            elem.set('cx', str((cx - min_x) * scale_x))
+            elem.set('cy', str((cy - min_y) * scale_y))
+            elem.set('r', str(r * (scale_x + scale_y)/2))
         
-        # Scale stroke width
+        elif elem.tag.endswith('path'):
+            # For <path> elements: scale and translate (handle coordinates)
+            path_data = elem.get('d', '')
+            coords = parse_simple_path(path_data)
+    
+            # Scale and translate the coordinates
+            scaled_coords = []
+            for point in coords:
+                cmd = point[0]
+                if cmd == 'M' or cmd == 'L':
+                    x, y = point[1], point[2]
+                    new_x = (x - min_x) * scale_x 
+                    new_y = (y - min_y) * scale_y 
+                    scaled_coords.append((cmd, new_x, new_y))
+                elif cmd == 'A':
+                    rx, ry = point[1], point[2]
+                    rotation_deg = point[3]
+                    laf, sf = point[4], point[5]
+                    end_x, end_y = point[6], point[7]
+
+                    new_rx = rx * scale_x
+                    new_ry = ry * scale_y 
+                    new_x = (end_x - min_x) * scale_x 
+                    new_y = (end_y - min_y) * scale_y 
+
+                    theta_rad = math.radians(rotation_deg)
+                    rotated = math.degrees(math.atan2(math.sin(theta_rad) * scale_x, math.cos(theta_rad) * scale_y)) % 360
+                    
+                    scaled_coords.append((cmd, new_rx, new_ry, rotated, laf, sf, new_x, new_y))
+            
+            # Rebuild the path data string with the scaled coordinates
+            scaled_path_data = ''
+            for point in scaled_coords:
+                cmd = point[0]
+                if cmd == 'M' or cmd == 'L':
+                    x, y = point[1], point[2]
+                    scaled_path_data += f"{cmd} {x},{y} "
+                elif cmd == 'A': 
+                    rx, ry, rotation_deg, laf, sf, end_x, end_y = point[1:]
+                    scaled_path_data += f"{cmd} {rx},{ry} {rotation_deg} {laf},{sf} {end_x},{end_y} "
+            elem.set('d', scaled_path_data)
+
         stroke_scale = elem.get("stroke-width")
         if stroke_scale:
-            new_scale = str(float(stroke_scale) * scale)
+            new_scale = str(float(stroke_scale) * 50)
         else:
-            new_scale = str(scale)
-        new_elem.set("stroke-width", new_scale)
+            new_scale = "5"
+        elem.set("stroke-width", new_scale)
 
-    return scaled_group
+    return group
 
 def group_elements_by_proximity(elements, threshold=10):
     """

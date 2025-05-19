@@ -6,22 +6,39 @@ import argparse
 from tqdm import tqdm
 import logging
 from datetime import datetime
-import traceback
 
 # Set up logging
 log_dir = "logs"
 os.makedirs(log_dir, exist_ok=True)
 log_file = os.path.join(log_dir, f"extraction_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 
-# Configure logging to only write to file
+# Configure logging to only show errors
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.ERROR,  # Changed to ERROR level
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(log_file)
+        logging.FileHandler(log_file),
+        logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Create a custom tqdm class that writes to stderr instead of stdout
+class TqdmToLogger:
+    def __init__(self, total, desc):
+        self.tqdm = tqdm(total=total, desc=desc)
+        
+    def update(self, n=1):
+        self.tqdm.update(n)
+        
+    def close(self):
+        self.tqdm.close()
+        
+    def __enter__(self):
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
 def extract_entities(root, ns):
     instance_id_to_objects = {}
@@ -73,11 +90,8 @@ def create_objects_imgs(instance_id_to_objects, split, ds_path="./dataset", orig
             filename = f"{base_filename}_{instance_id}.jpg"
             file_path = os.path.join(output_path, filename)
             group2png(scaled_group, file_path)
-            logger.info(f"Saved {category} (ID: {semantic_id}) object into {file_path}")
         except Exception as e:
             logger.error(f"Error processing object {category} (ID: {semantic_id}) with instance ID {instance_id}: {str(e)}")
-            traceback.print_exc()
-
             continue
 
 def group2png(group, file_path):
@@ -94,8 +108,8 @@ def extract_data(split, dataset_path):
     datapath = f"{dataset_path}/{split}/{split}/svg_gt"
     files = os.listdir(datapath)
     
-    # Create a single progress bar for the entire process
-    with tqdm(total=len(files), desc=f"Processing {split} files", file=open(os.devnull, 'w')) as pbar:
+    # Use the custom tqdm class
+    with TqdmToLogger(total=len(files), desc=f"Processing {split} files") as pbar:
         for filename in files:
             file_path = os.path.join(datapath, filename)
             try:
@@ -123,9 +137,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    logger.info(f"Starting data extraction for {args.split} split from {args.dataset_dir}")
     extract_data(args.split, args.dataset_dir)
-    logger.info("Data extraction completed")
 
 if __name__ == "__main__":
     main()
