@@ -7,17 +7,11 @@ from tqdm import tqdm
 import logging
 from datetime import datetime
 
-# Set up logging
-log_dir = "logs"
-os.makedirs(log_dir, exist_ok=True)
-log_file = os.path.join(log_dir, f"extraction_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-
 # Configure logging to only show errors
 logging.basicConfig(
-    level=logging.ERROR,  # Changed to ERROR level
+    level=logging.ERROR,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(log_file),
         logging.StreamHandler()
     ]
 )
