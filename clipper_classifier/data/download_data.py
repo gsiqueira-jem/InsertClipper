@@ -44,24 +44,16 @@ def main():
     url = f"https://drive.google.com/uc?id={args.test_url}"
     gdown.download(url, f"{args.data_save_dir}/test.zip")
 
-    # unzip
-    zip_path = os.path.join(args.data_save_dir, "train.zip")
-    unzip_dir = os.path.join(args.data_save_dir, "train")
-    os.makedirs(unzip_dir, exist_ok=True)
-    cmd = f"unzip {zip_path} -d {unzip_dir}"
-    os.system(cmd)
 
-    zip_path = os.path.join(args.data_save_dir, "val.zip")
-    unzip_dir = os.path.join(args.data_save_dir, "val")
-    os.makedirs(unzip_dir, exist_ok=True)
-    cmd = f"unzip {zip_path} -d {unzip_dir}"
-    os.system(cmd)
-
-    zip_path = os.path.join(args.data_save_dir, "test.zip")
-    unzip_dir = os.path.join(args.data_save_dir, "test")
-    os.makedirs(unzip_dir, exist_ok=True)
-    cmd = f"unzip {zip_path} -d {unzip_dir}"
-    os.system(cmd)
+    splits = ["train", "val", "test"]
+    for split in splits:
+        # unzip
+        zip_path = os.path.join(args.data_save_dir, f"{split}.zip")
+        unzip_dir = os.path.join(args.data_save_dir, split)
+        os.makedirs(unzip_dir, exist_ok=True)
+        cmd = f"unzip {zip_path} -d {unzip_dir}"
+        os.system(cmd)
+        os.remove(zip_path)
 
 if __name__ == '__main__':
     main()

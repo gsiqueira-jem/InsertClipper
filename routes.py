@@ -108,3 +108,13 @@ def extract_ambients(payload: InputModel):
     preds = (outputs > 0.5).int().tolist()
 
     return json.dumps({"result": preds})
+
+@router.post("/check-version")
+def check_version(payload: InputModel):
+    allowed_versions = ["1.0.0"]
+    version = payload.input[0]
+    print(version)
+    if version not in allowed_versions:
+        raise HTTPException(status_code=400, detail="Version not allowed or not supported")
+    
+    return "OK"

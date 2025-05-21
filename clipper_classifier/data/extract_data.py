@@ -123,15 +123,16 @@ def parse_args():
     parser.add_argument('--dataset_dir', type=str, default="./dataset",
                         help='dataset path'
                         )
-    parser.add_argument('--split', type=str, default="train",
-                        help='split to extract'
-                        )
     args = parser.parse_args()
     return args
 
 def main():
     args = parse_args()
-    extract_data(args.split, args.dataset_dir)
+    splits = ["train", "val", "test"]
+    
+    for split in splits:
+        print(f"Extracting {split} data...")
+        extract_data(split, args.dataset_dir)
 
 if __name__ == "__main__":
     main()
